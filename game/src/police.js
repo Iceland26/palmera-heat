@@ -133,6 +133,7 @@ export function createPolice(scene) {
       if (d < 7 && playerSpeed < 3) throttle = 0.25;
       if (d > 130) throttle = 1;
       stepCar(c, dt, { throttle, steer }, game.colliders, game.allCars);
+      if (p.z > 147 && !(p.x > 56.5 && p.x < 63.5)) p.z = 147; // the sea is not a road
       if (d > 210) { const s = roadPointNear(playerPos, 85); p.set(s.x, 0, s.z); }
     }
     // bust meter

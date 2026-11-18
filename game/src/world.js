@@ -297,7 +297,7 @@ export function createWorld(scene) {
   const pierMat = new THREE.MeshStandardMaterial({ color: 0x8a6a48, roughness: 0.95 });
   const deck = new THREE.Mesh(BOX(7, 0.5, 52), pierMat);
   deck.position.set(60, 0.9, SEA_Z + 24); deck.castShadow = true; deck.receiveShadow = true; group.add(deck);
-  colliders.push({ minX: 56.5, maxX: 63.5, minZ: SEA_Z, maxZ: SEA_Z + 50 });
+  // no collider for the pier: the deck is drivable/walkable (groundY lifts actors onto it)
   const postGeom = CYL(0.22, 0.22, 2.4, 6);
   const posts = new THREE.InstancedMesh(postGeom, pierMat, 12);
   for (let i = 0; i < 12; i++) posts.setMatrixAt(i, M4(60 + (i % 2 ? 3.2 : -3.2), 0, SEA_Z + 4 + Math.floor(i / 2) * 9.4));

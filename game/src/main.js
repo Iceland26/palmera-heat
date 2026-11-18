@@ -418,11 +418,49 @@ function updateCamera(dt) {
   }
 }
 
+let lastView = null, lastInfo = { bust: 0, active: 0, anySee: false };
+
+/** One simulation step of at most 1/30 s. The render rate never slows the
+ *  simulation: frame() runs as many of these as the elapsed time demands. */
+function stepPlay(dt) {
+  time += dt;
+  _prevPos.copy(playerPos());
+  updatePlayer(dt);
+  if (state !== 'play') return; // paused mid-update
+  const vel = playerVelOf(_prevPos, dt);
+  traffic.update(dt, world.colliders, allCars);
+  for (let i = threats.length - 1; i >= 0; i--) { threats[i].ttl -= dt; if (threats[i].ttl <= 0) threats.splice(i, 1); }
+  const activeThreats = threats.slice();
+  if (player.car && Math.abs(player.car.speed) > 7) activeThreats.push({ pos: player.car.mesh.position, radius: 8 });
+  peds.update(dt, activeThreats);
+  const info = police.update(dt, {
+    playerPos: playerPos(), playerVel: vel, playerSpeed: Math.abs(player.speedVis),
+    playerHeading: player.heading, heat, colliders: world.colliders, allCars,
+    onBusted: () => { pendingBust = true; },
+  });
+  lastInfo = info;
+  if (info.anySee) calmT = 0; else { calmT += dt; if (calmT > 9) heat = Math.max(0, heat - dt * 0.085); }
+  audio.setSiren(heat >= 0.5 && info.active > 0);
+  audio.tickSiren(dt);
+  updateRivals(dt);
+  for (let i = tracers.length - 1; i >= 0; i--) {
+    const t = tracers[i]; t.ttl -= dt;
+    t.line.material.opacity = Math.max(0, t.ttl / t.max);
+    if (t.ttl <= 0) { scene.remove(t.line); t.line.geometry.dispose(); tracers.splice(i, 1); }
+  }
+  lastView = missions.update(dt);
+  if (missions.finished && !completeShown) { completeShown = true; persist(); endRun('complete'); }
+  if (pendingBust) { pendingBust = false; endRun('busted'); }
+  world.setSunTarget(playerPos().x, playerPos().z);
+  world.update(dt);
+  saveT += dt;
+  if (saveT > 6) { saveT = 0; persist(); }
+}
+
 function frame() {
   requestAnimationFrame(frame);
-  const rawDt = Math.min(clock.getDelta(), 0.05);
-  const dt = rawDt * (window.__timeScale || 1);
-  time += dt;
+  const realDt = Math.min(clock.getDelta(), 1.0);
+  const rawDt = Math.min(realDt, 0.05);
   const dmgEl = document.getElementById('dmg');
   if (dmgEl.style.opacity > 0) dmgEl.style.opacity = Math.max(0, parseFloat(dmgEl.style.opacity) - rawDt * 1.6);
 
@@ -443,43 +481,20 @@ function frame() {
     return;
   }
 
-  // state === 'play'
-  _prevPos.copy(playerPos());
-  updatePlayer(dt);
-  if (state !== 'play') { renderer.render(scene, camera); return; } // paused mid-update
-  const vel = playerVelOf(_prevPos, dt);
-  traffic.update(dt, world.colliders, allCars);
-  for (let i = threats.length - 1; i >= 0; i--) { threats[i].ttl -= dt; if (threats[i].ttl <= 0) threats.splice(i, 1); }
-  const activeThreats = threats.slice();
-  if (player.car && Math.abs(player.car.speed) > 7) activeThreats.push({ pos: player.car.mesh.position, radius: 8 });
-  peds.update(dt, activeThreats);
-  const info = police.update(dt, {
-    playerPos: playerPos(), playerVel: vel, playerSpeed: Math.abs(player.speedVis),
-    playerHeading: player.heading, heat, colliders: world.colliders, allCars,
-    onBusted: () => { pendingBust = true; },
-  });
-  if (info.anySee) calmT = 0; else { calmT += dt; if (calmT > 9) heat = Math.max(0, heat - dt * 0.085); }
-  audio.setSiren(heat >= 0.5 && info.active > 0);
-  audio.tickSiren(dt);
-  updateRivals(dt);
-  for (let i = tracers.length - 1; i >= 0; i--) {
-    const t = tracers[i]; t.ttl -= dt;
-    t.line.material.opacity = Math.max(0, t.ttl / t.max);
-    if (t.ttl <= 0) { scene.remove(t.line); t.line.geometry.dispose(); tracers.splice(i, 1); }
-  }
-  const view = missions.update(dt);
-  if (view) hud.setObjective(view.title, view.objective, view.marker ? api.distTo(view.marker.x, view.marker.z) : null);
-  else hud.setObjective('FREE ROAM', 'Palmera is yours. Cruise the boulevard.', null);
-  if (missions.finished && !completeShown) { completeShown = true; persist(); endRun('complete'); }
-  if (pendingBust) { pendingBust = false; endRun('busted'); }
+  // state === 'play': simulate the full elapsed time in fixed substeps, so a
+  // slow renderer (or a fast-forward test hook) never slows the game world.
+  const total = realDt * (window.__timeScale || 1);
+  const steps = Math.min(150, Math.max(1, Math.ceil(total / (1 / 30))));
+  const h = total / steps;
+  for (let s = 0; s < steps && state === 'play'; s++) stepPlay(h);
+  if (state !== 'play') { renderer.render(scene, camera); return; }
 
-  world.setSunTarget(playerPos().x, playerPos().z);
-  world.update(dt);
   updateCamera(rawDt);
-
+  if (lastView) hud.setObjective(lastView.title, lastView.objective, lastView.marker ? api.distTo(lastView.marker.x, lastView.marker.z) : null);
+  else hud.setObjective('FREE ROAM', 'Palmera is yours. Cruise the boulevard.', null);
   hud.setCash(player.cash);
   hud.setStars(heat);
-  hud.setBust(info.bust);
+  hud.setBust(lastInfo.bust);
   hud.setHealth(player.health / 100);
   hud.setSpeed(player.car ? player.car.speed * 3.6 : 0);
   hud.update(rawDt);
@@ -487,11 +502,9 @@ function frame() {
     player: playerPos(), heading: player.heading,
     traffic: traffic.cars.map(c => c.mesh.position),
     police: [...police.cruisers.map(c => c.mesh.position), ...(police.heliPos ? [police.heliPos] : [])],
-    marker: view ? view.marker : null,
+    marker: lastView ? lastView.marker : null,
     flash: Math.sin(time * 6) > 0,
   });
-  saveT += dt;
-  if (saveT > 6) { saveT = 0; persist(); }
   renderer.render(scene, camera);
 }
 
