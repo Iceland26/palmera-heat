@@ -535,6 +535,12 @@ if (shotName) {
     for (const e of staged) if (e.speed) for (const w of e.mesh.userData.spin) w.rotation.x += e.speed * dt / 0.42;
     if (hero.speed) for (const w of hero.mesh.userData.spin) w.rotation.x += hero.speed * dt / 0.42;
     camera.position.copy(cam.pos); camera.lookAt(cam.look);
+    hud.drawMinimap({
+      player: hero.mesh.position, heading: hero.heading,
+      traffic: allCars.filter(c => c !== hero && !c.police).map(c => c.mesh.position),
+      police: allCars.filter(c => c.police).map(c => c.mesh.position),
+      marker: null, flash: false,
+    });
     renderer.render(scene, camera);
     if (++frames === 40) window.__shotReady = true;
   })();
