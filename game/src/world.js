@@ -146,10 +146,10 @@ export function createWorld(scene) {
   const LOT_BLOCKS = new Set(['-74,-148', '74,0', '-148,74']);
   for (const cx of COLS) for (const cz of ROWS) {
     const key = cx + ',' + cz;
-    const isGarage = cx === GARAGE_POS.x && cz === 74, isYacht = cx === YACHT_POS.x && cz === 74;
+    const isGarage = cx === GARAGE_POS.x && cz === 74, isYacht = cx === YACHT_POS.x && cz === 74, isClinic = cx === -74 && cz === 74;
     if (LOT_BLOCKS.has(key)) { slab(cx, cz, parking); continue; }
     slab(cx, cz, walk);
-    if (isGarage || isYacht) continue; // dressed below
+    if (isGarage || isYacht || isClinic) continue; // dressed below
     const n = 2 + Math.floor(rng() * 3);
     const spots = [[-15, -15], [15, -15], [-15, 15], [15, 15]].sort(() => rng() - 0.5);
     for (let i = 0; i < n; i++) {
@@ -182,9 +182,12 @@ export function createWorld(scene) {
   sign(['MARLIN YACHT CLUB'], '#123a4d', '#ffd98f', 15, 3, 148, 6, 88.2, 0);
   // Palmera PD on block (-148,-148)
   building(-156, -156, 22, 15, 18, 1);
-  sign(['PALMERA PD'], '#1c2f4a', '#dfe9f5', 11, 2.4, -145, 9, -146.8, 0);
-  // Clinica on block (-74,74)
-  sign(['CLINICA'], '#e8e0d0', '#c0392b', 9, 2.2, -74, 6.4, 96, 0);
+  sign(['PALMERA PD'], '#1c2f4a', '#dfe9f5', 11, 2.4, -144.7, 9, -156, Math.PI / 2);
+  // Clinica on block (-74,74): a low white block with a red-cross sign
+  const clinic = new THREE.Mesh(BOX(26, 8, 14), new THREE.MeshStandardMaterial({ color: 0xf0ece2, roughness: 0.85 }));
+  clinic.position.set(-74, 4, 82); clinic.castShadow = true; clinic.receiveShadow = true; group.add(clinic);
+  colliders.push({ minX: -87, maxX: -61, minZ: 75, maxZ: 89 });
+  sign(['CLINICA +'], '#e8e0d0', '#c0392b', 10, 2.4, -74, 6.2, 89.2, 0);
 
   // billboards
   function billboard(lines, bg, fg, x, z, ry) {

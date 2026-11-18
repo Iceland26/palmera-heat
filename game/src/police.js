@@ -111,6 +111,16 @@ export function createPolice(scene) {
         bar.children[2].material.color.setHex(ph ? 0x113377 : 0x2255ff);
       }
       if (c.roadblock || c.driver) continue;
+      if (heat < 0.5) {
+        // heat is gone: break off, drive away, despawn once clear
+        if (d > 55) { removeCruiser(c); continue; }
+        const awayH = Math.atan2(p.x - playerPos.x, p.z - playerPos.z);
+        let dd = awayH - c.heading;
+        while (dd > Math.PI) dd -= Math.PI * 2;
+        while (dd < -Math.PI) dd += Math.PI * 2;
+        stepCar(c, dt, { throttle: 0.85, steer: THREE.MathUtils.clamp(-dd * 1.7, -1, 1) }, game.colliders, game.allCars);
+        continue;
+      }
       // pursuit: aim at an intercept point
       const lead = THREE.MathUtils.clamp(d / 26, 0, 1.1);
       const tx = playerPos.x + game.playerVel.x * lead, tz = playerPos.z + game.playerVel.z * lead;

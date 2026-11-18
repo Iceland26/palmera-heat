@@ -35,7 +35,7 @@ export function createMissions(api) {
         },
         {
           obj: 'Deliver the package to Vista Plaza — fast', marker: { x: 88, z: 40 }, timed: 150,
-          enter: () => { api.addHeat(1); api.subtitle('MARISOL', 'Patrol boat radioed your plates. Drive like the tide is coming in.', 4); },
+          enter: () => { api.setHeat(Math.max(api.getHeat(), 1)); api.subtitle('MARISOL', 'Patrol boat radioed your plates. Drive like the tide is coming in.', 4); },
           check: () => api.distTo(88, 40) < 10,
           fail: () => api.subtitle('MARISOL', 'The buyer walked. Circle back — he gives you one more window.', 4),
         },
@@ -118,14 +118,13 @@ export function createMissions(api) {
   function loadStep() {
     const m = MISSIONS[index];
     step = m.steps[stepIdx];
-    ctx = {};
     timer = step.timed || null;
     if (step.say) playSay(step.say);
     if (step.enter) step.enter(ctx);
   }
 
   function start(i) {
-    index = i; stepIdx = 0; finished = false;
+    index = i; stepIdx = 0; finished = false; ctx = {}; // one ctx per mission, shared by its steps
     if (index >= MISSIONS.length) { finished = true; step = null; return; }
     loadStep();
   }

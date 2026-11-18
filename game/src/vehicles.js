@@ -85,7 +85,7 @@ export function createCar(color, opts = {}) {
 const _fwd = new THREE.Vector3();
 /** Arcade step. control: {throttle -1..1, steer -1..1}. Returns crash speed (0 = none). */
 export function stepCar(ent, dt, control, colliders, others) {
-  const targetSteer = control.steer * 0.5;
+  const targetSteer = -control.steer * 0.5; // wheel yaw follows the heading change sign
   ent.steerVis = targetSteer;
   if (control.throttle > 0) ent.speed += ent.accel * control.throttle * dt;
   else if (control.throttle < 0) ent.speed += (ent.speed > 0.5 ? -22 : -7) * -control.throttle * dt;
@@ -140,7 +140,7 @@ export function createTraffic(scene, rng, count = 16) {
     const line = axis === 'x' ? pick(rng, roadsX) : pick(rng, roadsZ);
     const dir = rng() > 0.5 ? 1 : -1;
     const along = range(rng, -175, 175);
-    ent.traffic = { axis, line, dir, speedT: range(rng, 9.5, 12.5), cool: 0 };
+    ent.traffic = { axis, line, dir, along, speedT: range(rng, 9.5, 12.5), cool: 0 };
     placeTraffic(ent);
     scene.add(ent.mesh); cars.push(ent);
   }

@@ -1,79 +1,68 @@
-// The screenshot scenes behind ?shot=start|play|end. Each one plays the real rules forward from a
-// fresh world for a fixed number of steps, steered by a simple autopilot (look ahead each way the
-// paddle could move, keep clear of blocks, chase the lowest coin when that is safe), so the frame
-// is what a short game really looks like and the same seed always gives the same frame.
-import { FIELD, PLAYER, STEP } from './config.js';
-import { EVENT_OVER, KIND_BLOCK } from './world.js';
-import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+// Screenshot scenes behind ?shot=cover|chase|foot|city&seed=N. Each stages the
+// real game world: the coral hero car, staged cruisers and traffic, walking
+// pedestrians and a story-telling HUD, then returns the camera to hold.
+// main.js renders the loop and sets window.__shotReady when the frame settles.
+import * as THREE from '../vendor/three.module.min.js';
+import { buildPerson } from './people.js';
 
-const START_SECONDS = 5;
-const PLAY_SECONDS = 26;
-const END_LIMIT_SECONDS = 600;
-/**
- * How far ahead, in seconds, the autopilot checks each way it could move: the play scene's pilot
- * looks well ahead and keeps all its lives; the end scene's looks only a moment ahead, so it is
- * caught out once the blocks speed up, as a hurried player is.
- */
-const HORIZON_PLAY = 0.7;
-const HORIZON_END = 0.25;
-const SAMPLE = 1 / 30;
-const DIRECTIONS = [0, -1, 1];
-/** Extra room, each side, it keeps between the paddle and a block. */
-const MARGIN = 10;
-
-/** Seconds until moving in `direction` (-1, 0, 1) runs the paddle into a block; Infinity when it never does. */
-function timeToHit(state, direction, horizon) {
-  const player = state.player;
-  for (let t = SAMPLE; t <= horizon; t += SAMPLE) {
-    const x = Math.min(FIELD.width - player.width, Math.max(0, player.x + direction * PLAYER.speed * t));
-    for (let index = 0; index < state.items.length; index += 1) {
-      const item = state.items[index];
-      if (!item.active || item.kind !== KIND_BLOCK) continue;
-      const y = item.y + item.speed * t;
-      if (y + item.height > player.y && y < player.y + player.height && item.x < x + player.width + MARGIN && item.x + item.width > x - MARGIN) return t;
-    }
-  }
-  return Infinity;
+function carAt(G, ent, x, z, heading, speed = 0) {
+  ent.mesh.position.set(x, 0, z);
+  ent.heading = heading; ent.mesh.rotation.y = heading;
+  ent.speed = speed;
+  return ent;
 }
 
-/** Of the safe ways to move, the one toward the lowest coin (or the centre); else the one that is hit last. */
-function autopilot(state, horizon) {
-  const player = state.player;
-  let coin = null;
-  for (let index = 0; index < state.items.length; index += 1) {
-    const item = state.items[index];
-    if (item.active && item.kind !== KIND_BLOCK && (coin === null || item.y > coin.y)) coin = item;
-  }
-  const target = coin === null ? FIELD.width / 2 : coin.x + coin.width / 2;
-  const centre = player.x + player.width / 2;
-  const wanted = target > centre + 8 ? 1 : target < centre - 8 ? -1 : 0;
-  let best = wanted;
-  let bestTime = timeToHit(state, wanted, horizon);
-  for (let index = 0; index < DIRECTIONS.length && bestTime !== Infinity; index += 1) {
-    const time = timeToHit(state, DIRECTIONS[index], horizon);
-    if (time > bestTime) {
-      bestTime = time;
-      best = DIRECTIONS[index];
-    }
-  }
-  return best;
-}
+export function stageShot(name, G) {
+  const { scene, hud, hero } = G;
+  G.setPlayerVisible(false);
+  hud.show();
 
-/**
- * Set `world` to the named scene (start, play or end; any other name is start) and return the
- * screen to draw over it and the best score to show.
- */
-export function stageShot(name, world) {
-  world.reset();
-  if (name !== 'play' && name !== 'end') {
-    for (let index = 0; index < START_SECONDS / STEP; index += 1) world.step(STEP, 0, true);
-    return { screen: SCREEN_TITLE, best: 0 };
+  if (name === 'chase') {
+    carAt(G, hero, 37, 44, 0, 15);
+    G.cruiserAt(29.5, 58, -0.35); G.cruiserAt(45.5, 59, 0.3); G.cruiserAt(37.5, 64, 0.05);
+    const flee = G.extraCar(0xffc845, {}); carAt(G, flee, 33.5, 16, 0.16, 13);
+    G.teleportPed(0, 29, 30); G.teleportPed(1, 45, 31); G.teleportPed(2, 28.5, 47);
+    hud.setCash(2310); hud.setStars(3); hud.setBust(0.35);
+    hud.setObjective('JOB 3 · THREE-STAR GOODBYE', 'Lose the heat!', null);
+    G.setSun(37, 40);
+    return { pos: new THREE.Vector3(37 - 3.5, 4.6, 44 + 12.5), look: new THREE.Vector3(36, 1, 22) };
   }
-  const limit = name === 'end' ? END_LIMIT_SECONDS : PLAY_SECONDS;
-  const horizon = name === 'end' ? HORIZON_END : HORIZON_PLAY;
-  for (let index = 0; index < limit / STEP; index += 1) {
-    if (world.step(STEP, autopilot(world.state, horizon), false) & EVENT_OVER) break;
+
+  if (name === 'foot') {
+    G.setPlayerVisible(true);
+    G.placePlayer(5.5, 98.5, Math.PI);
+    const sol = buildPerson({ shirt: 0x3ec6b8, pants: 0x37474f, skin: 0x8a5a34 });
+    sol.position.set(-4.5, 0, 96.5); sol.rotation.y = 2.6; scene.add(sol);
+    carAt(G, hero, 15, 100.5, Math.PI / 2, 0);
+    const truck = G.extraCar(0x7fb3d8, {}); carAt(G, truck, -16, 101.5, Math.PI / 2, 0);
+    G.teleportPed(3, -8, 102); G.teleportPed(4, 12, 121.5); G.teleportPed(5, -20, 121.8);
+    hud.setCash(420); hud.setStars(0); hud.setBust(0);
+    hud.setObjective('JOB 1 · FIRST WHEELS', 'Meet Sol Vega at his garage', null);
+    hud.subtitle('SOL', 'My loaner coupe is sitting at the Yacht Club. Bring her home and we talk work.', 999);
+    G.setSun(0, 92);
+    return { pos: new THREE.Vector3(5.5 + 2.2, 2.7, 98.5 + 7.2), look: new THREE.Vector3(0, 2.2, 90) };
   }
-  const over = world.state.lives === 0;
-  return { screen: over ? SCREEN_OVER : SCREEN_PLAY, best: world.state.score };
+
+  if (name === 'city') {
+    const a = G.extraCar(0xe8e0d0, {}); carAt(G, a, 8, 40.5, Math.PI / 2, 11);
+    const b = G.extraCar(0xd86a9a, {}); carAt(G, b, 33.5, 2, 0, 11);
+    const c2 = G.extraCar(0x3ec6b8, {}); carAt(G, c2, 62, 33.5, -Math.PI / 2, 11);
+    carAt(G, hero, 40.5, 60, Math.PI, 0);
+    G.teleportPed(6, 31, 31); G.teleportPed(7, 43, 44); G.teleportPed(8, 30, 45);
+    hud.setCash(870); hud.setStars(1); hud.setBust(0);
+    hud.setObjective('JOB 2 · HARBOUR RUN', 'Deliver the package to Vista Plaza — fast', null);
+    G.setSun(37, 37);
+    return { pos: new THREE.Vector3(63, 17, 79), look: new THREE.Vector3(34, 0, 33) };
+  }
+
+  // cover (default): golden-hour boulevard chase
+  carAt(G, hero, -26, 114.5, Math.PI / 2, 17);
+  G.cruiserAt(-41, 117.5, Math.PI / 2 + 0.06);
+  const oncoming = G.extraCar(0xe8e0d0, {}); carAt(G, oncoming, 42, 107.5, -Math.PI / 2, 12);
+  const parked = G.extraCar(0x7fb3d8, {}); carAt(G, parked, 6, 120.6, -Math.PI / 2, 0);
+  G.teleportPed(9, -12, 121.5); G.teleportPed(10, 2, 121.8); G.teleportPed(11, -38, 121.2);
+  hud.setCash(1250); hud.setStars(2); hud.setBust(0.12);
+  hud.setObjective('JOB 3 · THREE-STAR GOODBYE', 'Lose the heat!', null);
+  G.setSun(-26, 108);
+  return { pos: new THREE.Vector3(-26 - 10.5, 3.7, 114.5 - 2.5), look: new THREE.Vector3(-12, 1.2, 112) };
 }
